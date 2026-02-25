@@ -1,0 +1,36 @@
+# RAIN-Merging: Null-space Projection Model Merging
+# Core dependencies for the three-stage merging pipeline
+
+# Deep Learning Framework
+torch>=2.0.0
+transformers>=4.36.0
+
+# Scientific Computing
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Data Processing
+datasets>=2.14.0
+tqdm>=4.65.0
+
+# Optimization and Numerical Methods
+cvxpy>=1.3.0
+osqp>=0.6.2
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Utilities
+pandas>=2.0.0
+scikit-learn>=1.3.0
+accelerate>=0.24.0
+
+# Optional: For better performance
+# flash-attn>=2.0.0  # Uncomment if using Flash Attention
+# bitsandbytes>=0.41.0  # Uncomment for quantization support
+
+# Development (optional)
+pytest>=7.4.0
+black>=23.0.0
+isort>=5.12.0
