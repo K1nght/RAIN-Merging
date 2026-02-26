@@ -165,34 +165,27 @@ def compute_nullspace_projections(
         "total_constraint_residual": 0.0,
         "layer_stats": {}
     }
-    # Load a temporary model per layer to save VRAM
-    print("🔧 Per-layer processing mode (VRAM-friendly)...")
-    
+    # Load the model once for all layers (avoids repeated disk I/O)
+    print("🔧 Loading model for constraint construction (shared across all layers)...")
+    model_R_shared = AutoModelForCausalLM.from_pretrained(
+        model_target.config._name_or_path,
+        torch_dtype=torch.bfloat16,
+        device_map="auto" if torch.cuda.is_available() else "cpu",
+        trust_remote_code=True
+    ).eval()
+
     for li_idx, li in enumerate(tqdm(selected_layers, desc="Projection per layer")):
         print(f"\n🔄 Processing layer {li} ({li_idx+1}/{len(selected_layers)})")
-        
-        # Temporarily load a model for constraint construction
-        print(f"  📥 Temporarily loading model...")
-        model_R_temp = AutoModelForCausalLM.from_pretrained(
-            model_target.config._name_or_path,
-            torch_dtype=torch.bfloat16,
-            device_map="auto" if torch.cuda.is_available() else "cpu",
-            trust_remote_code=True
-        ).eval()
 
         # Build constraints for the current layer
         print(f"  📐 Building constraints for layer {li}...")
         layer_cons = build_constraints_single_layer_unified(
-            model_R_temp, prepped_samples, li, selected_heads, merge_types,
+            model_R_shared, prepped_samples, li, selected_heads, merge_types,
             w_q, w_k, q_rows_per_text, k_rows_per_text,
             w_v, w_o, v_rows_per_text, o_rows_per_text,
             w_ffn, ffn_rows_per_text, readout_dirs,
             qk_device, vo_device, ffn_device, compute_dtype, use_hooks, max_seq_len
         )
-        
-        # Immediately free the temporary model
-        del model_R_temp
-        cleanup_memory()
         
         layer_stats = {"heads": {}}
         
@@ -447,6 +440,11 @@ def compute_nullspace_projections(
         cleanup_memory()
         print(f"  🧹 Cleared constraints for layer {li}, freed VRAM")
     
+    # Free the shared model after processing all layers
+    del model_R_shared
+    cleanup_memory()
+    print("🧹 Released shared constraint model")
+
     print(f"\n✅ Null-space projection finished!")
     print(f"  📊 Totals:")
     print(f"     - Total CG iterations: {projection_stats['total_cg_iterations']}")

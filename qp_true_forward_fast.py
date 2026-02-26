@@ -315,24 +315,24 @@ def forward_attn_per_layer_optimized(
         def attention_hook(module, input, output):
             try:
                 # Retrieve attention weights from output
-                attention_weights = None
-                
                 if isinstance(output, tuple) and len(output) >= 2:
-                    if output[1] is not None and isinstance(output[1], torch.Tensor):
-                        attention_weights = output[1]  # [batch_size, num_heads, seq_len, seq_len]
-                
-                if attention_weights is not None and attention_weights.dim() == 4:
-                    # Save attention weights for all heads (keep same format as the original function)
-                    all_heads_attention = attention_weights[0]  # [num_heads, seq_len, seq_len]
-                    attention_cache[layer_idx] = all_heads_attention.detach().cpu()
-                    
-                    if verbose:
-                        print(f"        ✅ Layer {layer_idx}: {all_heads_attention.shape}")
-                        
+                    attention_weights = output[1]
+                    if attention_weights is not None and isinstance(attention_weights, torch.Tensor) and attention_weights.dim() == 4:
+                        # Capture to CPU immediately
+                        attention_cache[layer_idx] = attention_weights[0].detach().cpu()
+
+                        if verbose:
+                            print(f"        ✅ Layer {layer_idx}: {attention_cache[layer_idx].shape}")
+
+                        # Replace the GPU tensor with None in the returned output so the
+                        # model's all_self_attns accumulator stores None instead of holding
+                        # a live GPU tensor until the full forward completes.
+                        return (output[0], None) + output[2:]
+
             except Exception as e:
                 if verbose:
                     print(f"        ⚠️  Layer {layer_idx} hook error: {e}")
-        
+
         return attention_hook
     
     # Register hooks for selected layers
@@ -687,28 +687,25 @@ def compute_align_leak_vectors_instruction_wise(
                 U_k = instr['U_k']
                 related_count_k = instr['related_count_k']
                 unrelated_count_k = instr['unrelated_count_k']
-                
+
+                # Compute I_rows once and reuse for all three span queries
+                I_rows = A_h[I_k] if len(I_k) > 0 else None  # [|I_k|, T]
+
                 # a_k: I_k → R_k
                 a_k = 0.0
-                if len(I_k) > 0 and len(R_k) > 0:
-                    I_rows = A_h[I_k]  # [|I_k|, T]
-                    a_k = I_rows[:, R_k].sum().item()
-                    a_k = a_k / max(1, related_count_k)  # normalize
-                
+                if I_rows is not None and len(R_k) > 0:
+                    a_k = I_rows[:, R_k].sum().item() / max(1, related_count_k)
+
                 # u_k (instruction-level): I_k → U_k
                 u_k_instr = 0.0
-                if len(I_k) > 0 and len(U_k) > 0:
-                    I_rows = A_h[I_k]  # [|I_k|, T]
-                    u_k_instr = I_rows[:, U_k].sum().item()
-                    u_k_instr = u_k_instr / max(1, unrelated_count_k)  # normalize
-                
+                if I_rows is not None and len(U_k) > 0:
+                    u_k_instr = I_rows[:, U_k].sum().item() / max(1, unrelated_count_k)
+
                 # u_k_global: I_k → global unrelated
                 u_k_global = 0.0
-                if len(I_k) > 0 and len(U_global_valid) > 0:
-                    I_rows = A_h[I_k]  # [|I_k|, T]
-                    u_k_global = I_rows[:, U_global_valid].sum().item()
-                    u_k_global = u_k_global / max(1, global_unrelated_count)  # normalize
-                
+                if I_rows is not None and len(U_global_valid) > 0:
+                    u_k_global = I_rows[:, U_global_valid].sum().item() / max(1, global_unrelated_count)
+
                 a_head_total += a_k
                 u_head_total += u_k_instr + u_k_global
             

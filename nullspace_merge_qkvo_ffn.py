@@ -69,10 +69,7 @@ def read_json_samples(path: str, tokenizer, max_n: Optional[int] = None) -> List
         
         # Build complete conversation
         full_prompt = formatted_prompt + reasoning + "\n</think>\n\n"  # + response
-        # full_prompt = formatted_prompt + reasoning[:100]
         full_prompts.append(full_prompt)
-        print(full_prompt)
-        exit()
     
     return full_prompts
 
@@ -1102,7 +1099,6 @@ def cg_ffn_gate(cons, task_dGate, lam=1e-4, maxit=100, tol=1e-5, device="cpu", c
         x += alpha * p; r -= alpha * Ap; rs_new = (r*r).sum()
         if torch.sqrt(rs_new) <= tol * torch.sqrt((rhs*rhs).sum()+1e-12): break
         p = r + (rs_new/(rs+1e-12))*p; rs = rs_new
-        print(f"CG_ffn_gate: {it+1} iterations, residual_norm: {torch.sqrt(rs_new).item()}")
     
     dG_w = AT_times_y_ffn_gate(x, cons, task_dGate_compute.size(0), task_dGate_compute.size(1), device, compute_dtype)
     dG_proj = task_dGate_compute - dG_w
@@ -1155,7 +1151,6 @@ def cg_ffn_up(cons, task_dUp, lam=1e-4, maxit=100, tol=1e-5, device="cpu", compu
         x += alpha * p; r -= alpha * Ap; rs_new = (r*r).sum()
         if torch.sqrt(rs_new) <= tol * torch.sqrt((rhs*rhs).sum()+1e-12): break
         p = r + (rs_new/(rs+1e-12))*p; rs = rs_new
-        print(f"CG_ffn_up: {it+1} iterations, residual_norm: {torch.sqrt(rs_new).item()}")
     
     dU_w = AT_times_y_ffn_up(x, cons, task_dUp_compute.size(0), task_dUp_compute.size(1), device, compute_dtype)
     dU_proj = task_dUp_compute - dU_w
@@ -1351,13 +1346,10 @@ def q_dense_project(cons_h, task_dQ, lam=1e-4, device="cpu", compute_dtype=torch
     rhs = s * (M * KJ).sum(dim=1)                          # [m]
 
     try:
-        L = torch.cholesky(G)
-        z = torch.linalg.solve(rhs.unsqueeze(-1), L)[0].squeeze(-1)
-    except (RuntimeError, AttributeError):
-        try:
-            z = torch.linalg.solve(rhs.unsqueeze(-1), G)[0].squeeze(-1)
-        except AttributeError:
-            z = (torch.inverse(G) @ rhs.unsqueeze(-1)).squeeze(-1)
+        L = torch.linalg.cholesky(G)
+        z = torch.cholesky_solve(rhs.unsqueeze(-1), L).squeeze(-1)
+    except RuntimeError:
+        z = torch.linalg.solve(G, rhs)
 
     w = z * s                                              # [m]
     dQ_w   = X.T @ (w[:, None] * KJ)                       # [d_model, hD]
@@ -1396,13 +1388,10 @@ def k_dense_project(cons_h, task_dK, lam=1e-4, device="cpu", compute_dtype=torch
     rhs = s * (M * QI).sum(dim=1)
 
     try:
-        L = torch.cholesky(G)
-        z = torch.linalg.solve(rhs.unsqueeze(-1), L)[0].squeeze(-1)
-    except (RuntimeError, AttributeError):
-        try:
-            z = torch.linalg.solve(rhs.unsqueeze(-1), G)[0].squeeze(-1)
-        except AttributeError:
-            z = (torch.inverse(G) @ rhs.unsqueeze(-1)).squeeze(-1)
+        L = torch.linalg.cholesky(G)
+        z = torch.cholesky_solve(rhs.unsqueeze(-1), L).squeeze(-1)
+    except RuntimeError:
+        z = torch.linalg.solve(G, rhs)
 
     w = z * s
     dK_w   = X.T @ (w[:, None] * QI)
@@ -1440,13 +1429,10 @@ def v_dense_project(cons_h, task_dV, lam=1e-4, device="cpu", compute_dtype=torch
     rhs = s * (M * RV).sum(dim=1)
 
     try:
-        L = torch.cholesky(G)
-        z = torch.linalg.solve(rhs.unsqueeze(-1), L)[0].squeeze(-1)
-    except (RuntimeError, AttributeError):
-        try:
-            z = torch.linalg.solve(rhs.unsqueeze(-1), G)[0].squeeze(-1)
-        except AttributeError:
-            z = (torch.inverse(G) @ rhs.unsqueeze(-1)).squeeze(-1)
+        L = torch.linalg.cholesky(G)
+        z = torch.cholesky_solve(rhs.unsqueeze(-1), L).squeeze(-1)
+    except RuntimeError:
+        z = torch.linalg.solve(G, rhs)
 
     w = z * s
     dV_w   = X.T @ (w[:, None] * RV)
@@ -1484,13 +1470,10 @@ def o_dense_project(cons_h, task_dO, lam=1e-4, device="cpu", compute_dtype=torch
     rhs = s * (M * Z).sum(dim=1)
 
     try:
-        L = torch.cholesky(G)
-        z = torch.linalg.solve(rhs.unsqueeze(-1), L)[0].squeeze(-1)
-    except (RuntimeError, AttributeError):
-        try:
-            z = torch.linalg.solve(rhs.unsqueeze(-1), G)[0].squeeze(-1)
-        except AttributeError:
-            z = (torch.inverse(G) @ rhs.unsqueeze(-1)).squeeze(-1)
+        L = torch.linalg.cholesky(G)
+        z = torch.cholesky_solve(rhs.unsqueeze(-1), L).squeeze(-1)
+    except RuntimeError:
+        z = torch.linalg.solve(G, rhs)
 
     w = z * s
     dO_w   = C.T @ (w[:, None] * Z)
@@ -1519,7 +1502,6 @@ def cg_ffn_down(cons, task_dDown_T, lam=1e-4, maxit=100, tol=1e-5, device="cpu",
         rs_new = (r*r).sum()
         if torch.sqrt(rs_new) <= tol * torch.sqrt((rhs*rhs).sum()+1e-12): break
         p = r + (rs_new/(rs+1e-12))*p; rs = rs_new
-        print(f"CG_ffn_down: {it+1} iterations, residual_norm: {torch.sqrt(rs_new).item()}")
     dT_w = AT_times_y_ffn_down(x, cons, task_dDown_T_compute.size(0), task_dDown_T_compute.size(1), device, compute_dtype)
     dT_proj = task_dDown_T_compute - dT_w
     res = A_times_delta_ffn_down(dT_proj, cons, device, compute_dtype)
