@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://openreview.net/forum?id=PO2iULmu5e"><img src="https://img.shields.io/badge/OpenReview-ICLR-blue.svg" alt="OpenReview"></a>
-  <a href="https://arxiv.org/abs/YOUR_ARXIV_ID"><img src="https://img.shields.io/badge/arXiv-Paper-b31b1b.svg" alt="arXiv"></a>
+  <a href="https://arxiv.org/abs/2602.22538"><img src="https://img.shields.io/badge/arXiv-Paper-b31b1b.svg" alt="arXiv"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
 </p>
 
